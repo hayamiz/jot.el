@@ -88,8 +88,7 @@
 	  jot-file-name))
 
 (defun jot-parse-jot-file (file-name)
-  (let ((jotbuf
-	 (find-file-noselect (jot-file-name file-name)))
+  (let ((jotbuf (jot-buffer file-name))
 	(dict (jot-get-dict file-name))
 	(dict-entries nil))
     (save-excursion
@@ -131,11 +130,23 @@
 	(setq it thing))
       it)))
 
-(defun jot-buffer ()
-  (find-file-noselect jot-file-name))
+(defun jot-buffer (&optional file-name)
+  (unless file-name
+    (setq file-name (buffer-file-name (current-buffer))))
+  (let ((buf (find-buffer-visiting
+	      (expand-file-name (jot-file-name file-name)))))
+    (if buf
+	buf
+      (setq buf (find-file-noselect (jot-file-name file-name)))
+      (save-excursion
+	(set-buffer buf)
+	(jot-parse-jot-file file-name)))))
 
 (defun jot-other-window ()
-  (switch-to-buffer-other-window (jot-buffer)))
+  (let ((curbuf (buffer-file-name (current-buffer))))
+    (if curbuf
+	(switch-to-buffer-other-window
+	 (jot-buffer curbuf)))))
 
 (defun jot-get-dict (file-name)
   (let ((jotname (jot-file-name file-name)))
