@@ -42,11 +42,11 @@
 (defvar jot-dicts nil)
 
 (defcustom jot-file-name ".jot-mode" ""
-  :group jot-mode
+  :group 'jot-mode
   :type 'string)
 
 (defcustom jot-file-unified nil ""
-  :group jot-mode
+  :group 'jot-mode
   :type 'boolean)
 
 (if jot-mode-map
