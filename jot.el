@@ -39,8 +39,6 @@
 
 (defvar jot-mode-map nil)
 
-(defvar jot-dicts nil)
-
 (defcustom jot-file-name ".jot" ""
   :group 'jot-mode
   :type 'string)
@@ -64,11 +62,8 @@
   (progn t))
 
 (defun jot-after-save-hook-function ()
-  (let ((regex (concat (regexp-quote jot-file-name) "$"))
-	(file-name (buffer-file-name (current-buffer))))
-    (when (and file-name
-	       (string-match regex file-name))
-      (jot-parse-jot-file file-name))))
+  (interactive)
+  )
 
 (defun jot-mode-maybe ()
   (if (not (minibufferp (current-buffer)))
@@ -124,6 +119,59 @@
     (set-text-properties 0 (length sym) nil sym)
     `(,sym . ,lineno)))
 
+(defun jot-get-line-str (&optional lineno)
+  (let (ret)
+    (save-excursion
+      (if lineno (goto-line lineno))
+      (let (bof eof)
+	(beginning-of-line) (setq bof (point))
+	(end-of-line) (setq eof (point))
+	(setq ret (buffer-substring bof eof))))
+    ret))
+
+(defun jot-get-line-obj (&optional lineno)
+  (let ((linestr (jot-get-line-str lineno)))
+    (let (keyword places-str (places nil))
+      (if (null (string-match
+		 "^\\*\\*\\s-+\\(\\(\\sw\\|\\s_\\)+\\)\\s-*\\(\\((.*)\\)?\\)\\s-*:" linestr))
+	  nil
+	(setq keyword (match-string 1 linestr))
+	(setq places-str (match-string 3 linestr))
+	(if (< (length places-str) 3)
+	    (list keyword)
+	  (setq places-str (substring places-str
+				      1 (- (length places-str) 1)))
+	  
+	  ;; this codes still have a bug with pathnames with comma
+	  (setq places (split-string places-str ","))
+	  (cons keyword places))
+	))))
+
+(defun jot-line-obj-add-place (lineobj place)
+  (let ((places (cdr lineobj)))
+       (unless (member place places)
+	 (setq places (cons place places))
+	 (rplacd lineobj places)))
+  lineobj)
+
+(defun jot-line-obj-to-string (lineobj)
+  (let ((keyword (car lineobj))
+	(places (cdr lineobj)))
+    (format "** %s%s: "
+	    keyword
+	    (if (null places) ""
+	      (format "(%s)" (mapconcat 'identity places ","))))))
+
+(defun jot-replace-line (lineobj &optional lineno)
+  (save-excursion
+    (if lineno
+	(goto-line lineno))
+    (let (bof eof)
+      (beginning-of-line) (setq bol (point))
+      (end-of-line) (setq eol (point))
+      (delete-region bol eol))
+    (insert (jot-line-obj-to-string lineobj))))
+
 (defun jot-read-it ()
   (let ((thing (thing-at-point 'symbol)))
     (remove-text-properties 0 (length thing)
@@ -153,31 +201,20 @@
   (switch-to-buffer-other-window
    (jot-buffer)))
 
-(defun jot-get-dict (file-name)
-  (let ((jotname (jot-file-name file-name)))
-    (let ((dict (assoc jotname jot-dicts)))
-      (if dict
-	  dict
-	(let ((newcell `(,jotname . ())))
-	  (add-to-list 'jot-dicts newcell)
-	  newcell)
-	))
-    ))
-
 (defun jot-it (&optional place)
   (interactive)
   (let ((it (jot-read-it))
 	(current-file (expand-file-name
 		       (or (buffer-file-name (current-buffer))
 			   "~/dummy"))))
-    (let ((dict-entry (assoc it (jot-get-dict current-file)))
-	  keyword-in-jotbuffer)
+    (let (keyword-in-jotbuffer)
       (save-excursion
 	(set-buffer (jot-buffer))
 	(beginning-of-buffer)
 	(setq keyword-in-jotbuffer
 	      (re-search-forward
-	       (format "^\\*\\* %s" (regexp-quote it))))
+	       (format "^\\*\\* %s" (regexp-quote it))
+	       nil t))
 	;; (debug)
 	(cond
 	 ((null keyword-in-jotbuffer)
@@ -186,27 +223,25 @@
 	  (unless (eq 0 (current-column))
 	    (newline))
 	  (insert
-	   (format "\n** %s%s: " it
+	   (format "\n** %s%s: \n" it
 		   (if (null place)
 		       ""
-		     (format "(%s:%d)" (car place) (cdr place)))))
-	  (unless dict-entry
-	    (setq dict-entry (cons it (current-line))))
-	  (newline)
-	  (jot-parse-jot-file current-file))
+		     (format "(%s)" place)))))
 	 (t
 	  ;; 
 	  (goto-char keyword-in-jotbuffer)
 	  (when place
-	    (let ((curlineobj (jot-get-current-line-obj)))
+	    (let ((curlineobj (jot-get-line-obj)))
 	      (jot-line-obj-add-place curlineobj place)
-	      (jot-replace-current-line curlineobj)))
-	  (unless dict-entry
-	    (jot-parse-jot-file current-file))
-	  )
+	      (jot-replace-line curlineobj))))
 	 ))
       (jot-other-window)
-      (goto-line (cdr dict-entry)))
+      (beginning-of-buffer)
+      (let ((pt (re-search-forward
+		 (format "^\\*\\*\\s-+%s" (regexp-quote it)))))
+	(unless pt (error (format "Cannot find keyword: %s" it)))
+	(goto-char pt)
+	(beginning-of-line)))
     (message it)
     ))
 
@@ -214,9 +249,9 @@
   (interactive)
   (let ((file-name (expand-file-name
 		    (buffer-file-name (current-buffer))))
-	(line-no (current-line)))
+	(line-no (line-number-at-pos)))
     (if file-name
-	(jot-it (cons file-name line-no))
+	(jot-it (format "%s:%d" file-name line-no))
       (jot-it))
   ))
 
