@@ -79,7 +79,11 @@
   jot-mode jot-mode-maybe
   :group 'jot-mode)
 
-(defun jot-file-name (file-name)
+(defun jot-file-name (&optional file-name)
+  (unless file-name
+    (setq file-name (or (buffer-file-name (current-buffer))
+			"~/dummy")))
+  (setq file-name (expand-file-name file-name))
   (format "%s/%s"
 	  (directory-file-name 
 	   (if jot-file-unified
@@ -140,13 +144,12 @@
       (setq buf (find-file-noselect (jot-file-name file-name)))
       (save-excursion
 	(set-buffer buf)
-	(jot-parse-jot-file file-name)))))
+	(jot-parse-jot-file file-name))
+      buf)))
 
 (defun jot-other-window ()
-  (let ((curbuf (buffer-file-name (current-buffer))))
-    (if curbuf
-	(switch-to-buffer-other-window
-	 (jot-buffer curbuf)))))
+  (switch-to-buffer-other-window
+   (jot-buffer)))
 
 (defun jot-get-dict (file-name)
   (let ((jotname (jot-file-name file-name)))
@@ -163,11 +166,11 @@
   (interactive)
   (let ((it (jot-read-it))
 	(place (expand-file-name
-		(buffer-file-name
-		 (current-buffer)))))
+		(or (buffer-file-name (current-buffer))
+		    "~/dummy"))))
     (let (pt (dict-entry (assoc it (jot-get-dict place))))
       (unless dict-entry
-	(save-excursion
+	(progn
 	  (set-buffer (jot-buffer))
 	  (end-of-buffer)
 	  (unless (eq 0 (current-column))
