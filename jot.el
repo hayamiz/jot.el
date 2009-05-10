@@ -41,7 +41,7 @@
 
 (defvar jot-dicts nil)
 
-(defcustom jot-file-name ".jot-mode" ""
+(defcustom jot-file-name ".jot" ""
   :group 'jot-mode
   :type 'string)
 
@@ -52,10 +52,12 @@
 (if jot-mode-map
     nil
   (setq jot-mode-map (make-sparse-keymap))
-  (define-key jot-mode-map (kbd "M-j") 'jot-it)
+  (define-key jot-mode-map (kbd "M-j") 'jot-it-just)
+  (define-key jot-mode-map (kbd "M-k") 'jot-it-with-place)
     )
 
 (define-minor-mode jot-mode
+  "Jot mode"
   :lighter " Jot"
   :group 'jot-mode
   :keymap jot-mode-map
@@ -99,7 +101,7 @@
       (set-buffer jotbuf)
       (beginning-of-buffer)
       (while (re-search-forward
-	      "^\\*\\* \\(\\sw\\|\\s_\\)+\\s-*:"
+	      "^\\*\\* \\(\\sw\\|\\s_\\)+\\s-*\\(:\\|(\\)"
 	      nil t)
 	(goto-char (match-beginning 0))
 	(let (bol eol (curline (current-line)))
@@ -108,7 +110,7 @@
 	  (let ((line-str (buffer-substring bol eol)))
 	    (set-text-properties 0 (length line-str) nil line-str)
 	    (setq dict-entries
-		  (cons 
+		  (cons
 		   (jot-file-line-to-dict-entry
 		    line-str curline)
 		   dict-entries))))))
@@ -162,29 +164,69 @@
 	))
     ))
 
-(defun jot-it ()
+(defun jot-it (&optional place)
   (interactive)
   (let ((it (jot-read-it))
-	(place (expand-file-name
-		(or (buffer-file-name (current-buffer))
-		    "~/dummy"))))
-    (let (pt (dict-entry (assoc it (jot-get-dict place))))
-      (unless dict-entry
-	(progn
-	  (set-buffer (jot-buffer))
+	(current-file (expand-file-name
+		       (or (buffer-file-name (current-buffer))
+			   "~/dummy"))))
+    (let ((dict-entry (assoc it (jot-get-dict current-file)))
+	  keyword-in-jotbuffer)
+      (save-excursion
+	(set-buffer (jot-buffer))
+	(beginning-of-buffer)
+	(setq keyword-in-jotbuffer
+	      (re-search-forward
+	       (format "^\\*\\* %s" (regexp-quote it))))
+	;; (debug)
+	(cond
+	 ((null keyword-in-jotbuffer)
+	  ;; there's no keyword `it' in the jot buffer
 	  (end-of-buffer)
 	  (unless (eq 0 (current-column))
 	    (newline))
+	  (insert
+	   (format "\n** %s%s: " it
+		   (if (null place)
+		       ""
+		     (format "(%s:%d)" (car place) (cdr place)))))
+	  (unless dict-entry
+	    (setq dict-entry (cons it (current-line))))
 	  (newline)
-	  (insert (format "** %s: " it))
-	  (setq pt (point))
-	  (newline)))
+	  (jot-parse-jot-file current-file))
+	 (t
+	  ;; 
+	  (goto-char keyword-in-jotbuffer)
+	  (when place
+	    (let ((curlineobj (jot-get-current-line-obj)))
+	      (jot-line-obj-add-place curlineobj place)
+	      (jot-replace-current-line curlineobj)))
+	  (unless dict-entry
+	    (jot-parse-jot-file current-file))
+	  )
+	 ))
       (jot-other-window)
-      (if dict-entry
-	  (goto-line (cdr dict-entry))
-	(goto-char pt))
-      (message it)
-      )))
+      (goto-line (cdr dict-entry)))
+    (message it)
+    ))
+
+(defun jot-it-with-place ()
+  (interactive)
+  (let ((file-name (expand-file-name
+		    (buffer-file-name (current-buffer))))
+	(line-no (current-line)))
+    (if file-name
+	(jot-it (cons file-name line-no))
+      (jot-it))
+  ))
+
+(defun jot-it-just ()
+  (interactive)
+  (jot-it))
+
+;;;
+;;; jot-view-mode (major-mode)
+;;;
 
 (provide 'jot)
 ;;; jot.el ends here
