@@ -198,8 +198,10 @@
       buf)))
 
 (defun jot-other-window ()
-  (switch-to-buffer-other-window
-   (jot-buffer)))
+  (let ((buf (jot-buffer)))
+    (if (not (equal buf (current-buffer)))
+	(switch-to-buffer-other-window
+	 buf))))
 
 (defun jot-it (&optional place)
   (interactive)
