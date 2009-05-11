@@ -81,6 +81,19 @@
     (setq file-name (or (buffer-file-name (current-buffer))
 			"~/dummy")))
   (setq file-name (expand-file-name file-name))
+
+  ;; search `jot-file-name' in parent directories
+  ;; If there's not, make it at current directory
+  (let ((prev-dir nil) (cur-dir (file-name-directory file-name)))
+    (block nil
+      (while (not (equal prev-dir cur-dir))
+	(let ((cur-file-name (expand-file-name jot-file-name cur-dir)))
+	  (when (file-exists-p cur-file-name)
+	    (progn (setq file-name cur-file-name)
+		   (return)))
+	  (setq prev-dir cur-dir)
+	  (setq cur-dir (file-name-directory (directory-file-name cur-dir)))))))
+
   (format "%s/%s"
 	  (directory-file-name 
 	   (if jot-file-unified
@@ -191,11 +204,7 @@
 	      (expand-file-name (jot-file-name file-name)))))
     (if buf
 	buf
-      (setq buf (find-file-noselect (jot-file-name file-name)))
-      (save-excursion
-	(set-buffer buf)
-	(jot-parse-jot-file file-name))
-      buf)))
+      (find-file-noselect (jot-file-name file-name)))))
 
 (defun jot-other-window ()
   (let ((buf (jot-buffer)))
@@ -215,7 +224,7 @@
 	(beginning-of-buffer)
 	(setq keyword-in-jotbuffer
 	      (re-search-forward
-	       (format "^\\*\\* %s" (regexp-quote it))
+	       (format "^\\*\\*\\s-+%s\\s-*\\(:\\|(\\)" (regexp-quote it))
 	       nil t))
 	;; (debug)
 	(cond
@@ -240,7 +249,7 @@
       (jot-other-window)
       (beginning-of-buffer)
       (let ((pt (re-search-forward
-		 (format "^\\*\\*\\s-+%s" (regexp-quote it)))))
+		 (format "^\\*\\*\\s-+%s\\s-*\\(:\\|(\\)" (regexp-quote it)))))
 	(unless pt (error (format "Cannot find keyword: %s" it)))
 	(goto-char pt)
 	(beginning-of-line)))
