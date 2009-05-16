@@ -252,7 +252,8 @@
 		 (format "^\\*\\*\\s-+%s\\s-*\\(:\\|(\\)" (regexp-quote it)))))
 	(unless pt (error (format "Cannot find keyword: %s" it)))
 	(goto-char pt)
-	(beginning-of-line)))
+	(beginning-of-line)
+	(next-line)))
     (message it)
     ))
 
